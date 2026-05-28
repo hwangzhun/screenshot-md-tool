@@ -151,6 +151,7 @@
       background: var(--red);
     }
     .api-key-dot.configured { background: var(--green); }
+    .api-sep { color: var(--text-faint); margin: 0 2px; }
 
     /* 标题栏小按钮（主题、设置） */
     .titlebar-btn {
@@ -777,8 +778,11 @@
   <div class="titlebar-center"></div>
   <div class="titlebar-right">
     <div class="api-key-status" id="api-key-status">
-      <div class="api-key-dot" id="api-key-dot"></div>
-      <span id="api-key-label">未配置</span>
+      <div class="api-key-dot" id="ocr-key-dot"></div>
+      <span id="ocr-key-label">OCR 未配置</span>
+      <span class="api-sep">|</span>
+      <div class="api-key-dot" id="llm-key-dot"></div>
+      <span id="llm-key-label">LLM 未配置</span>
     </div>
     <button class="titlebar-btn" id="theme-toggle" title="切换主题">🌙</button>
     <button class="titlebar-btn" id="settings-btn" title="设置">⚙️</button>
@@ -862,27 +866,51 @@
     </div>
 
     <div class="settings-body">
-      <!-- API 设置 -->
+      <!-- OCR API 设置 -->
       <div class="settings-section">
-        <div class="settings-section-title">API 配置</div>
+        <div class="settings-section-title">OCR API 配置</div>
 
         <div class="setting-row">
           <span class="setting-label">API Key</span>
-          <input id="s-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
+          <input id="s-ocr-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">API 地址</span>
-          <input id="s-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
+          <input id="s-ocr-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">模型</span>
-          <input id="s-model" class="setting-input" type="text" placeholder="hunyuan-vision" autocomplete="off" />
+          <input id="s-ocr-model" class="setting-input" type="text" placeholder="hunyuan-vision" autocomplete="off" />
         </div>
 
         <div class="setting-hint" id="api-hint">
-          提示：请确保已开通混元大模型并创建 API Key；API 地址和模型名称均支持手动输入
+          提示：OCR API 用于识别图片中的文字，支持 OpenAI 兼容视觉模型
+        </div>
+      </div>
+
+      <!-- 大模型 API 设置 -->
+      <div class="settings-section">
+        <div class="settings-section-title">大模型 API 配置</div>
+
+        <div class="setting-row">
+          <span class="setting-label">API Key</span>
+          <input id="s-llm-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">API 地址</span>
+          <input id="s-llm-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">模型</span>
+          <input id="s-llm-model" class="setting-input" type="text" placeholder="hunyuan-turbo" autocomplete="off" />
+        </div>
+
+        <div class="setting-hint" id="llm-api-hint">
+          提示：大模型 API 用于将 OCR 文本整理为 Markdown，支持 OpenAI 兼容文本模型
         </div>
       </div>
 
@@ -917,6 +945,20 @@
           </select>
         </div>
 
+        <div class="setting-row">
+          <span class="setting-label">跳过整理</span>
+          <div class="theme-switch-row">
+            <label class="theme-switch">
+              <input type="checkbox" id="s-skip-organize" />
+              <span class="theme-slider"></span>
+            </label>
+            <span class="theme-label-text" id="skip-organize-label">直接输出 OCR 原文</span>
+          </div>
+        </div>
+        <div class="setting-hint">
+          开启后仅调用 OCR API，不再使用大模型整理，适合调试或想自己手动整理的场景
+        </div>
+
       </div>
     </div>
 
@@ -948,11 +990,11 @@ const state = {
 // ══════════════════════════════════════════════════
 const SETTINGS_KEY = 'screenshot_md_settings'
 const DEFAULT_SETTINGS = {
-  apiKey: '',
-  apiHost: 'api.hunyuan.cloud.tencent.com',
-  model: 'hunyuan-vision',
+  ocrApi: { apiKey: '', apiHost: 'api.hunyuan.cloud.tencent.com', model: 'hunyuan-vision' },
+  llmApi: { apiKey: '', apiHost: 'api.hunyuan.cloud.tencent.com', model: 'hunyuan-turbo' },
   theme: 'dark',
-  batchSize: 5
+  batchSize: 5,
+  skipOrganize: false
 }
 
 function loadSettings() {
@@ -960,27 +1002,24 @@ function loadSettings() {
     const saved = localStorage.getItem(SETTINGS_KEY)
     if (saved) {
       const parsed = JSON.parse(saved)
-      // 旧版 Minimax 配置迁移到 DeepSeek
-      if (parsed.model?.startsWith('MiniMax') || parsed.model?.startsWith('abab') || (parsed.apiHost && parsed.apiHost.includes('minimax'))) {
-        parsed.apiHost = 'api.hunyuan.cloud.tencent.com'
-        parsed.model = 'hunyuan-vision'
+      // 旧版单一 API 配置迁移到双 API 结构
+      if (parsed.apiKey && !parsed.ocrApi) {
+        parsed.ocrApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || 'api.hunyuan.cloud.tencent.com', model: parsed.model || 'hunyuan-vision' }
+        parsed.llmApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || 'api.hunyuan.cloud.tencent.com', model: parsed.model === 'hunyuan-vision' ? 'hunyuan-turbo' : (parsed.model || 'hunyuan-turbo') }
+        delete parsed.apiKey
+        delete parsed.apiHost
+        delete parsed.model
       }
-      // 旧版 DeepSeek 配置迁移到混元
-      if (parsed.apiHost?.includes('deepseek') || parsed.model?.includes('deepseek')) {
-        parsed.apiHost = 'api.hunyuan.cloud.tencent.com'
-        parsed.model = 'hunyuan-vision'
-      }
-      // 移除已废弃的字段
       delete parsed.apiPath
       delete parsed.fallback
       delete parsed.customHost
       return { ...DEFAULT_SETTINGS, ...parsed }
     }
   } catch {}
-  // 迁移旧 API Key（仅 key 迁移，提供商改为 DeepSeek）
+  // 迁移旧 minimax_api_key
   const oldKey = localStorage.getItem('minimax_api_key')
   if (oldKey) {
-    const s = { ...DEFAULT_SETTINGS, apiKey: oldKey }
+    const s = { ...DEFAULT_SETTINGS, ocrApi: { ...DEFAULT_SETTINGS.ocrApi, apiKey: oldKey }, llmApi: { ...DEFAULT_SETTINGS.llmApi, apiKey: oldKey } }
     saveSettings(s)
     localStorage.removeItem('minimax_api_key')
     return s
@@ -1032,11 +1071,15 @@ const settingsBtn    = $('settings-btn')
 const settingsClose  = $('settings-close')
 const settingsCancel = $('settings-cancel')
 const settingsSave   = $('settings-save')
-const sApikey    = $('s-apikey')
-const sApihost   = $('s-apihost')
-const sModel     = $('s-model')
+const sOcrApikey = $('s-ocr-apikey')
+const sOcrApihost = $('s-ocr-apihost')
+const sOcrModel = $('s-ocr-model')
+const sLlmApikey = $('s-llm-apikey')
+const sLlmApihost = $('s-llm-apihost')
+const sLlmModel = $('s-llm-model')
 const sTheme     = $('s-theme')
 const sBatchSize = $('s-batch-size')
+const sSkipOrganize = $('s-skip-organize')
 const themeToggle = $('theme-toggle')
 const apiHint    = $('api-hint')
 
@@ -1076,15 +1119,25 @@ function updateBadge() {
 }
 
 function updateApiKeyStatus() {
-  const dot = $('api-key-dot')
-  const label = $('api-key-label')
-  if (settings.apiKey) {
-    dot.className = 'api-key-dot configured'
-    const masked = settings.apiKey.slice(0, 6) + '...' + settings.apiKey.slice(-4)
-    label.textContent = masked
+  const ocrDot = $('ocr-key-dot')
+  const ocrLabel = $('ocr-key-label')
+  const llmDot = $('llm-key-dot')
+  const llmLabel = $('llm-key-label')
+
+  if (settings.ocrApi?.apiKey) {
+    ocrDot.className = 'api-key-dot configured'
+    ocrLabel.textContent = 'OCR ' + settings.ocrApi.apiKey.slice(0, 6) + '...'
   } else {
-    dot.className = 'api-key-dot'
-    label.textContent = '未配置'
+    ocrDot.className = 'api-key-dot'
+    ocrLabel.textContent = 'OCR 未配置'
+  }
+
+  if (settings.llmApi?.apiKey) {
+    llmDot.className = 'api-key-dot configured'
+    llmLabel.textContent = 'LLM ' + settings.llmApi.apiKey.slice(0, 6) + '...'
+  } else {
+    llmDot.className = 'api-key-dot'
+    llmLabel.textContent = 'LLM 未配置'
   }
 }
 updateApiKeyStatus()
@@ -1094,10 +1147,14 @@ updateApiKeyStatus()
 // ══════════════════════════════════════════════════
 function openSettings() {
   // 填入当前设置
-  sApikey.value = settings.apiKey
-  sApihost.value = settings.apiHost
-  sModel.value = settings.model
+  sOcrApikey.value = settings.ocrApi?.apiKey || ''
+  sOcrApihost.value = settings.ocrApi?.apiHost || 'api.hunyuan.cloud.tencent.com'
+  sOcrModel.value = settings.ocrApi?.model || 'hunyuan-vision'
+  sLlmApikey.value = settings.llmApi?.apiKey || ''
+  sLlmApihost.value = settings.llmApi?.apiHost || 'api.hunyuan.cloud.tencent.com'
+  sLlmModel.value = settings.llmApi?.model || 'hunyuan-turbo'
   sTheme.checked = settings.theme === 'light'
+  sSkipOrganize.checked = !!settings.skipOrganize
   updateThemeLabels()
   sBatchSize.value = settings.batchSize
   settingsOverlay.classList.add('active')
@@ -1123,24 +1180,35 @@ settingsOverlay.addEventListener('click', (e) => {
 sTheme.addEventListener('change', updateThemeLabels)
 
 settingsSave.addEventListener('click', () => {
-  const apiHost = sApihost.value.trim()
-  const model = sModel.value.trim()
-  if (!apiHost) {
-    showToast('请输入 API 地址', 'error')
+  const ocrApiHost = sOcrApihost.value.trim()
+  const ocrModel = sOcrModel.value.trim()
+  const llmApiHost = sLlmApihost.value.trim()
+  const llmModel = sLlmModel.value.trim()
+
+  if (!ocrApiHost) {
+    showToast('请输入 OCR API 地址', 'error')
     return
   }
-  if (!model) {
-    showToast('请输入模型名称', 'error')
+  if (!llmApiHost) {
+    showToast('请输入大模型 API 地址', 'error')
     return
   }
 
   settings = {
     ...settings,
-    apiKey: sApikey.value.trim(),
-    apiHost,
-    model,
+    ocrApi: {
+      apiKey: sOcrApikey.value.trim(),
+      apiHost: ocrApiHost,
+      model: ocrModel || 'hunyuan-vision'
+    },
+    llmApi: {
+      apiKey: sLlmApikey.value.trim(),
+      apiHost: llmApiHost,
+      model: llmModel || 'hunyuan-turbo'
+    },
     theme: sTheme.checked ? 'light' : 'dark',
-    batchSize: parseInt(sBatchSize.value)
+    batchSize: parseInt(sBatchSize.value),
+    skipOrganize: sSkipOrganize.checked
   }
 
   saveSettings(settings)
@@ -1261,12 +1329,33 @@ clearBtn.addEventListener('click', () => {
 // ══════════════════════════════════════════════════
 //   主流程：识别
 // ══════════════════════════════════════════════════
+function buildRawOCRMarkdown(ocrPages) {
+  const now = new Date().toLocaleString('zh-CN')
+  const lines = [`# OCR 原始文本\n`, `> 识别时间：${now}\n> 流程：仅 OCR，未经过大模型整理\n`, `---\n`]
+  for (const page of ocrPages) {
+    const name = page.filePath ? page.filePath.split(/[\\/]/).pop() : `截图 ${page.index}`
+    lines.push(`## 截图 ${page.index}：${name}\n`)
+    if (page.error) {
+      lines.push(`> OCR 失败：${page.error}\n`)
+    } else if (page.text) {
+      lines.push(page.text + '\n')
+    } else {
+      lines.push(`*（未识别到文字）*\n`)
+    }
+    lines.push('\n')
+  }
+  return lines.join('').trim()
+}
+
 startBtn.addEventListener('click', async () => {
-  // 重新加载设置（可能用户在其他地方改了）
   settings = loadSettings()
-  const apiKey = settings.apiKey
-  if (!apiKey) {
-    showToast('请先在设置中配置混元 API Key', 'error')
+  if (!settings.ocrApi?.apiKey) {
+    showToast('请先在设置中配置 OCR API Key', 'error')
+    openSettings()
+    return
+  }
+  if (!settings.skipOrganize && !settings.llmApi?.apiKey) {
+    showToast('请先在设置中配置大模型 API Key', 'error')
     openSettings()
     return
   }
@@ -1277,11 +1366,11 @@ startBtn.addEventListener('click', async () => {
 
   const total = state.images.length
   setProgress(2)
-  setStatus(`第 1 步：正在 OCR ${total} 张截图…`, 'processing')
+  setStatus(`第 1 步：正在调用 OCR API 识别 ${total} 张截图…`, 'processing')
 
-  const ocrRes = await window.electronAPI.recognizeImagesOCR(
+  const ocrRes = await window.electronAPI.recognizeImagesCloudOCR(
     state.images.map(img => img.path),
-    { lang: 'chi_sim+eng' }
+    settings.ocrApi
   )
 
   if (!ocrRes.success) {
@@ -1295,6 +1384,25 @@ startBtn.addEventListener('click', async () => {
 
   const ocrPages = ocrRes.data.pages || []
   const textCount = ocrPages.reduce((sum, page) => sum + (page.text || '').length, 0)
+  const pageStats = ocrPages.map(p => `#${p.index}:${(p.text || '').length}字`).join(' ')
+
+  // 跳过整理模式：直接输出 OCR 原文
+  if (settings.skipOrganize) {
+    setProgress(100)
+    setTimeout(() => setProgress(0), 800)
+    const rawMd = buildRawOCRMarkdown(ocrPages)
+    mdEditor.value = rawMd
+    state.mdContent = rawMd
+    updateWordCount()
+    if (state.mode === 'preview') renderPreview()
+    setStatus(`OCR 完成！共 ${total} 张，合计 ${textCount} 字（${pageStats}）`, 'success')
+    showToast('OCR 完成（未整理）', 'success')
+    state.processing = false
+    updateBadge()
+    return
+  }
+
+  // 整理模式（原有逻辑）
   if (textCount === 0) {
     setProgress(0)
     setStatus('OCR 完成，但没有识别到文字', '')
@@ -1305,14 +1413,9 @@ startBtn.addEventListener('click', async () => {
   }
 
   setProgress(55)
-  setStatus(`第 2 步：OCR 得到 ${textCount} 字，正在交给模型整理 Markdown…`, 'processing')
+  setStatus(`第 2 步：OCR 得到 ${textCount} 字（${pageStats}），正在交给大模型整理 Markdown…`, 'processing')
 
-  const apiConfig = {
-    apiKey,
-    apiHost: settings.apiHost,
-    model: settings.model
-  }
-  const res = await window.electronAPI.organizeOCRText(apiConfig, ocrPages)
+  const res = await window.electronAPI.organizeOCRText(settings.llmApi, ocrPages)
 
   if (!res.success) {
     setProgress(0)
@@ -1339,7 +1442,7 @@ startBtn.addEventListener('click', async () => {
   setTimeout(() => setProgress(0), 800)
 
   if (allMarkdown) {
-    const header = `# 语录收集\n\n> 整理时间：${new Date().toLocaleString('zh-CN')}\n> 流程：本地 OCR → 文本模型整理\n\n---\n\n`
+    const header = `# 语录收集\n\n> 整理时间：${new Date().toLocaleString('zh-CN')}\n> 流程：OCR API → 文本模型整理\n\n---\n\n`
     const finalMd = header + allMarkdown
     mdEditor.value = finalMd
     state.mdContent = finalMd

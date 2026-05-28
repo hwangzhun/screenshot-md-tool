@@ -1,16 +1,12 @@
 /**
  * main.js - Electron 主进程
- * 负责窗口管理、IPC 处理、文件读写、腾讯云混元多模态 API 调用
+ * 负责窗口管理、IPC 处理、文件读写、OpenAI 兼容 API 调用
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const https = require('https')
-const crypto = require('crypto')
-const { createWorker } = require('tesseract.js')
-const chiSimData = require('@tesseract.js-data/chi_sim')
-const engData = require('@tesseract.js-data/eng')
 
 let mainWindow = null
 
@@ -117,15 +113,6 @@ ipcMain.handle('call-vision-api', async (event, apiConfig, base64Images) => {
   }
 })
 
-ipcMain.handle('recognize-images-ocr', async (event, filePaths, ocrConfig = {}) => {
-  try {
-    const result = await recognizeImagesOCR(filePaths, ocrConfig)
-    return { success: true, data: result }
-  } catch (err) {
-    return { success: false, error: err.message }
-  }
-})
-
 ipcMain.handle('recognize-images-cloud-ocr', async (event, filePaths, cloudConfig = {}) => {
   try {
     const result = await recognizeImagesCloudOCR(filePaths, cloudConfig)
@@ -144,73 +131,7 @@ ipcMain.handle('organize-ocr-text', async (event, apiConfig, ocrPages) => {
   }
 })
 
-ipcMain.handle('organize-ocr-text-pipeline', async (event, apiConfig, ocrPages, options) => {
-  try {
-    const result = await organizeOCRTextPipeline(apiConfig, ocrPages, options)
-    return { success: true, data: result }
-  } catch (err) {
-    return { success: false, error: err.message }
-  }
-})
-
-ipcMain.handle('recognize-images-cloud-ocr', async (event, filePaths, ocrConfig = {}) => {
-  try {
-    const result = await recognizeImagesCloudOCR(filePaths, ocrConfig)
-    return { success: true, data: result }
-  } catch (err) {
-    return { success: false, error: err.message }
-  }
-})
-
-async function recognizeImagesOCR(filePaths, ocrConfig = {}) {
-  if (!Array.isArray(filePaths) || filePaths.length === 0) {
-    throw new Error('没有可识别的图片')
-  }
-
-  const lang = ocrConfig.lang || 'chi_sim+eng'
-  const worker = await createWorker(lang, 1, {
-    langPath: ensureLocalOCRLangPath(),
-    gzip: true,
-    cacheMethod: 'none'
-  })
-  const pages = []
-
-  try {
-    for (let i = 0; i < filePaths.length; i++) {
-      const filePath = filePaths[i]
-      if (!fs.existsSync(filePath)) {
-        pages.push({ index: i + 1, filePath, text: '', error: '文件不存在' })
-        continue
-      }
-
-      const ret = await worker.recognize(filePath)
-      const text = normalizeOCRText(ret.data?.text || '')
-      pages.push({ index: i + 1, filePath, text })
-    }
-  } finally {
-    await worker.terminate()
-  }
-
-  return { pages, combinedText: buildOCRCorpus(pages) }
-}
-
-function ensureLocalOCRLangPath() {
-  const langDir = path.join(app.getPath('userData'), 'tesseract-langs')
-  fs.mkdirSync(langDir, { recursive: true })
-  copyOCRLangFile(chiSimData, langDir)
-  copyOCRLangFile(engData, langDir)
-  return langDir
-}
-
-function copyOCRLangFile(langData, targetDir) {
-  const fileName = `${langData.code}.traineddata.gz`
-  const source = path.join(langData.langPath, fileName)
-  const target = path.join(targetDir, fileName)
-  if (!fs.existsSync(target)) {
-    fs.copyFileSync(source, target)
-  }
-}
-
+// normalizeOCRText 会在云 OCR 中复用，保留
 function normalizeOCRText(text) {
   return String(text)
     .replace(/\r/g, '')
@@ -231,6 +152,48 @@ function buildOCRCorpus(pages) {
     .join('\n\n')
 }
 
+// ─────────────────────────────────────────────────────────
+// 云 OCR：通过 OpenAI 兼容视觉 API 识别图片文字
+// ─────────────────────────────────────────────────────────
+async function recognizeImagesCloudOCR(filePaths, ocrApiConfig) {
+  if (!Array.isArray(filePaths) || filePaths.length === 0) {
+    throw new Error('没有可识别的图片')
+  }
+
+  const ocrPrompt = '请提取图片中的所有文字，按从上到下、从左到右的阅读顺序原样输出。只输出识别到的文字，不要解释，不要 Markdown 格式。'
+  const pages = []
+
+  for (let i = 0; i < filePaths.length; i++) {
+    const filePath = filePaths[i]
+    if (!fs.existsSync(filePath)) {
+      pages.push({ index: i + 1, filePath, text: '', error: '文件不存在' })
+      continue
+    }
+
+    const buffer = fs.readFileSync(filePath)
+    const ext = path.extname(filePath).toLowerCase().replace('.', '')
+    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
+    const mime = mimeMap[ext] || 'image/jpeg'
+    const base64 = `data:${mime};base64,${buffer.toString('base64')}`
+
+    const bodyObj = {
+      model: ocrApiConfig.model,
+      messages: [{ role: 'user', content: [{ type: 'text', text: ocrPrompt }, { type: 'image_url', image_url: { url: base64 } }] }]
+    }
+
+    try {
+      const response = await postOpenAICompatible(ocrApiConfig, bodyObj, 'OCR API')
+      const content = response.choices?.[0]?.message?.content || ''
+      const text = normalizeOCRText(typeof content === 'string' ? content : JSON.stringify(content))
+      pages.push({ index: i + 1, filePath, text })
+    } catch (err) {
+      pages.push({ index: i + 1, filePath, text: '', error: err.message })
+    }
+  }
+
+  return { pages, combinedText: buildOCRCorpus(pages) }
+}
+
 async function organizeOCRText(apiConfig, ocrPages) {
   const { apiKey, apiHost, model } = apiConfig
   const combinedText = Array.isArray(ocrPages) ? buildOCRCorpus(ocrPages) : String(ocrPages || '')
@@ -238,16 +201,17 @@ async function organizeOCRText(apiConfig, ocrPages) {
     throw new Error('OCR 文本为空，无法整理')
   }
 
+  const pageCount = Array.isArray(ocrPages) ? ocrPages.length : 0
   const promptText = [
-    '下面是手机截图经过 OCR 后得到的文本。请把其中真正有价值的短语、语录、摘抄、感悟性文字整理成纯 Markdown。',
+    `下面是 ${pageCount} 张手机截图经过 OCR 后得到的文本，每张以【截图 N: 文件名】标记。请把其中真正有价值的短语、语录、摘抄、感悟性文字整理成纯 Markdown。`,
     '',
     '处理规则：',
-    '1. 忽略 UI 噪音：按钮、导航栏、评论、点赞数、用户名、时间戳、话题标签、广告、OCR 误识别符号等。',
-    '2. 如果多张连续截图属于同一段内容，请按截图顺序合并为完整段落，并去掉重复的页眉、页脚和重叠句子。',
-    '3. 如果一张截图就是一句短语或语录，请使用引用格式：> 语录内容。',
-    '4. 长段落按来源或主题分组，用二级标题 `## 标题` 区分。',
+    '1. **必须处理全部截图**：输入中有几张【截图 N】，输出就要覆盖这几张里的有效正文；不同截图中的独立内容分别保留，不要只输出其中一张。',
+    '2. 忽略 UI 噪音：按钮、导航栏、评论、点赞数、用户名、时间戳、话题标签、广告、OCR 误识别符号等。',
+    '3. 仅当多张连续截图明确属于同一段长文时，才按截图顺序合并为完整段落，并去掉重复的页眉、页脚和重叠句子；若内容彼此独立，用二级标题 `## 截图 N` 分节，不要合并成一条。',
+    '4. 单句短语或语录使用引用格式：> 语录内容。',
     '5. 尽量保留原文，不要改写，不要补写 OCR 没有的内容；只做必要的清洗、合并和断句。',
-    '6. 不确定是否属于正文的内容宁可删除。',
+    '6. 仅删除能明确判断为 UI 或乱码的片段；正文宁可多留，不要误删。',
     '7. 只返回 Markdown，不要解释处理过程。',
     '',
     'OCR 文本：',
@@ -256,7 +220,8 @@ async function organizeOCRText(apiConfig, ocrPages) {
 
   const bodyObj = {
     model,
-    messages: [{ role: 'user', content: promptText }]
+    messages: [{ role: 'user', content: promptText }],
+    max_tokens: 8192
   }
 
   const response = await postOpenAICompatible(apiConfig, bodyObj, '整理 API')

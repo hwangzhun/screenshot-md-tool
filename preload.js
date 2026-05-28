@@ -24,12 +24,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('call-vision-api', apiConfig, base64Images),
 
   /**
-   * 先对图片做 OCR，返回每张截图的原始文本。
-   * @param {string[]} filePaths - 图片文件绝对路径
-   * @param {object} ocrConfig - OCR 配置，如 { lang: 'chi_sim+eng' }
+   * 通过云端视觉 API 识别图片文字（需 OpenAI 兼容多模态模型）
+   * @param {string[]} filePaths - 图片文件绝对路径数组
+   * @param {object} ocrApiConfig - OCR API 配置 { apiKey, apiHost, model }
    */
-  recognizeImagesOCR: (filePaths, ocrConfig) =>
-    ipcRenderer.invoke('recognize-images-ocr', filePaths, ocrConfig),
+  recognizeImagesCloudOCR: (filePaths, ocrApiConfig) =>
+    ipcRenderer.invoke('recognize-images-cloud-ocr', filePaths, ocrApiConfig),
 
   /**
    * 将 OCR 文本发送给文本模型，整理为 Markdown。
