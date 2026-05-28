@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>语录收集 · Screenshot to MD</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    /* ══════════════════════════════════════════════════
+       CSS 变量 — 暗色主题（默认）
+       ══════════════════════════════════════════════════ */
+    :root {
+      --bg-body: #111113;
+      --bg-panel: #18181b;
+      --bg-card: #1d1d21;
+      --bg-input: #2a2a2e;
+      --bg-hover: #252528;
+      --bg-active: #4f8ef715;
+      --border: #2a2a2e;
+      --border-hover: #3a3a3f;
+      --text-primary: #e0e0e0;
+      --text-secondary: #bbb;
+      --text-muted: #888;
+      --text-dim: #666;
+      --text-faint: #555;
+      --text-ghost: #444;
+      --accent: #4f8ef7;
+      --accent-hover: #6ba3ff;
+      --accent-bg: #4f8ef720;
+      --accent-faint: #4f8ef710;
+      --purple: #a855f7;
+      --red: #ff4d4d;
+      --red-bg: #ff4d4d20;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --code-bg: #2a2a2e;
+      --code-color: #a78bfa;
+      --blockquote-bg: #4f8ef710;
+      --blockquote-color: #a8c4f7;
+      --shadow-heavy: #00000060;
+      --drop-border: #333;
+      --scrollbar-thumb: #333;
+      --toast-bg: #2a2a2e;
+    }
+
+    /* ══════════════════════════════════════════════════
+       CSS 变量 — 亮色主题
+       ══════════════════════════════════════════════════ */
+    :root.light {
+      --bg-body: #f5f5f7;
+      --bg-panel: #ffffff;
+      --bg-card: #f0f0f2;
+      --bg-input: #e8e8ec;
+      --bg-hover: #ededf0;
+      --bg-active: #4f8ef712;
+      --border: #e0e0e3;
+      --border-hover: #c8c8cc;
+      --text-primary: #1a1a1a;
+      --text-secondary: #444;
+      --text-muted: #666;
+      --text-dim: #888;
+      --text-faint: #aaa;
+      --text-ghost: #c5c5c5;
+      --accent: #4f8ef7;
+      --accent-hover: #3b7de6;
+      --accent-bg: #4f8ef718;
+      --accent-faint: #4f8ef708;
+      --purple: #8b5cf6;
+      --red: #ef4444;
+      --red-bg: #ef444415;
+      --green: #16a34a;
+      --yellow: #d97706;
+      --code-bg: #e8e8ec;
+      --code-color: #7c3aed;
+      --blockquote-bg: #4f8ef710;
+      --blockquote-color: #2d6bcf;
+      --shadow-heavy: #00000018;
+      --drop-border: #c8c8cc;
+      --scrollbar-thumb: #c0c0c4;
+      --toast-bg: #ffffff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg-body);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      transition: background .3s, color .3s;
+    }
+
+    /* ───── 顶部标题栏（自定义无边框） ───── */
+    .titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 0 16px;
+      height: 42px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+      transition: background .3s, border-color .3s;
+    }
+    .titlebar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      -webkit-app-region: no-drag;
+      min-width: 0;
+    }
+    .app-icon {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, #4f8ef7, #a855f7);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .app-title { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+    .app-subtitle { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+    .titlebar-center {
+      flex: 1;
+      -webkit-app-region: drag;
+    }
+    .titlebar-right {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      -webkit-app-region: no-drag;
+    }
+
+    /* API Key 状态指示器 */
+    .api-key-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-faint);
+      padding: 0 10px;
+      height: 100%;
+    }
+    .api-key-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .api-key-dot.configured { background: var(--green); }
+
+    /* 标题栏小按钮（主题、设置） */
+    .titlebar-btn {
+      width: 34px; height: 100%;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .titlebar-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* 窗口控制按钮组 */
+    .win-controls {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      margin-left: 4px;
+    }
+    .win-btn {
+      width: 46px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 11px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+      -webkit-app-region: no-drag;
+    }
+    .win-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .win-btn.close-btn:hover { background: var(--red); color: #fff; }
+
+    /* 最大化按钮图标 */
+    .win-btn .max-icon {
+      width: 10px; height: 10px;
+      border: 1.5px solid currentColor;
+      border-radius: 1px;
+    }
+    .win-btn .max-icon.maximized {
+      width: 8px; height: 8px;
+      border-width: 1.5px;
+      position: relative;
+    }
+    .win-btn .max-icon.maximized::after {
+      content: '';
+      position: absolute;
+      top: -3px; left: -3px;
+      width: 8px; height: 8px;
+      border: 1.5px solid currentColor;
+      border-radius: 1px;
+      border-bottom: none;
+      border-right: none;
+    }
+
+    /* 最小化按钮图标 */
+    .win-btn .min-icon {
+      width: 10px;
+      border-bottom: 1.5px solid currentColor;
+    }
+
+    /* ───── 主体布局 ───── */
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ───── 左侧面板 ───── */
+    .left-panel {
+      width: 360px;
+      min-width: 300px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: background .3s, border-color .3s;
+    }
+
+    .panel-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color .3s;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; color: var(--text-muted); letter-spacing: .5px; }
+    .badge {
+      background: var(--bg-input);
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+    .badge.active { background: var(--accent-bg); color: var(--accent); }
+
+    /* 拖拽区 */
+    .drop-zone {
+      margin: 12px;
+      border: 2px dashed var(--drop-border);
+      border-radius: 12px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: var(--bg-card);
+      flex-shrink: 0;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-faint);
+    }
+    .drop-zone.drag-over { transform: scale(1.01); }
+    .drop-icon { font-size: 32px; margin-bottom: 8px; }
+    .drop-text { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    .drop-text strong { color: var(--accent); cursor: pointer; }
+    .drop-hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; }
+
+    /* 图片列表 */
+    .image-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+    }
+    .image-list::-webkit-scrollbar { width: 4px; }
+    .image-list::-webkit-scrollbar-track { background: transparent; }
+    .image-list::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    .image-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: grab;
+      transition: background .15s;
+      border: 1px solid transparent;
+      margin-bottom: 4px;
+      position: relative;
+    }
+    .image-item:hover { background: var(--bg-hover); }
+    .image-item.dragging { opacity: .4; }
+    .image-item.drag-target { border-color: var(--accent); background: var(--bg-active); }
+
+    .img-thumb {
+      width: 56px; height: 56px;
+      object-fit: cover;
+      border-radius: 8px;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      pointer-events: none;
+    }
+    .img-info { flex: 1; overflow: hidden; }
+    .img-name {
+      font-size: 12px; color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .img-size { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+    .img-order {
+      width: 20px; height: 20px;
+      background: var(--bg-input);
+      border-radius: 50%;
+      font-size: 11px; color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .img-delete {
+      width: 22px; height: 22px;
+      border: none;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      transition: all .15s;
+    }
+    .img-delete:hover { background: var(--red-bg); color: var(--red); }
+
+    .empty-hint {
+      text-align: center;
+      color: var(--text-ghost);
+      font-size: 13px;
+      padding: 30px 0;
+    }
+
+    /* 操作按钮区 */
+    .action-area {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      transition: border-color .3s;
+    }
+    .btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #4f8ef7, #6366f1);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #6ba3ff, #7c7ff5);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px #4f8ef740;
+    }
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text-muted);
+    }
+    .btn-secondary:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ───── 右侧面板 ───── */
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      transition: background .3s, border-color .3s;
+    }
+    .tab-btn {
+      padding: 5px 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .2s;
+      background: transparent;
+      color: var(--text-dim);
+    }
+    .tab-btn.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+    .tab-btn:hover:not(.active) { color: var(--text-secondary); }
+
+    .toolbar-sep { flex: 1; }
+
+    .tool-btn {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      background: var(--bg-card);
+      color: var(--text-muted);
+      transition: all .2s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-hover); }
+    .tool-btn.danger:hover { background: var(--red-bg); color: var(--red); border-color: #ff4d4d40; }
+
+    /* 编辑器 */
+    .editor-wrapper { flex: 1; position: relative; overflow: hidden; }
+    #md-editor {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      background: var(--bg-body);
+      color: var(--text-secondary);
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 20px 24px;
+      tab-size: 2;
+      transition: background .3s, color .3s;
+    }
+    #md-editor::-webkit-scrollbar { width: 6px; }
+    #md-editor::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+    #md-preview {
+      position: absolute; inset: 0;
+      overflow-y: auto;
+      padding: 24px 32px;
+      display: none;
+    }
+    #md-preview::-webkit-scrollbar { width: 6px; }
+    #md-preview::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+    #md-preview.active { display: block; }
+
+    /* Markdown 渲染样式 */
+    .preview-content h1, .preview-content h2, .preview-content h3 {
+      color: var(--text-primary);
+      margin: 1.4em 0 .6em;
+      font-weight: 600;
+    }
+    .preview-content h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .preview-content h2 { font-size: 18px; }
+    .preview-content h3 { font-size: 15px; }
+    .preview-content p { font-size: 14px; line-height: 1.8; color: var(--text-secondary); margin-bottom: 1em; }
+    .preview-content blockquote {
+      border-left: 3px solid var(--accent);
+      margin: 1em 0;
+      padding: 10px 16px;
+      background: var(--blockquote-bg);
+      border-radius: 0 8px 8px 0;
+      color: var(--blockquote-color);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    .preview-content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.5em 0;
+    }
+    .preview-content ul, .preview-content ol {
+      padding-left: 1.5em;
+      margin-bottom: 1em;
+    }
+    .preview-content li { font-size: 14px; color: var(--text-secondary); line-height: 1.8; }
+    .preview-content code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--code-color);
+    }
+    .preview-content pre {
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      margin-bottom: 1em;
+    }
+    .preview-content pre code {
+      background: transparent;
+      padding: 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    /* ───── 状态栏 ───── */
+    .statusbar {
+      height: 32px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      font-size: 12px;
+      flex-shrink: 0;
+      transition: background .3s, border-color .3s;
+    }
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-faint);
+    }
+    .status-dot.processing { background: var(--yellow); animation: pulse 1s infinite; }
+    .status-dot.success { background: var(--green); }
+    .status-dot.error { background: var(--red); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .status-text { color: var(--text-dim); flex: 1; }
+    .status-count { color: var(--text-faint); }
+
+    /* ───── 进度条 ───── */
+    .progress-bar-wrap {
+      display: none;
+      position: fixed;
+      top: 42px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      z-index: 100;
+    }
+    .progress-bar-wrap.active { display: block; }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4f8ef7, #a855f7);
+      width: 0%;
+      transition: width .4s ease;
+    }
+
+    /* ───── Toast 通知 ───── */
+    .toast {
+      position: fixed;
+      bottom: 48px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--toast-bg);
+      color: var(--text-primary);
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      box-shadow: 0 8px 30px var(--shadow-heavy);
+      border: 1px solid var(--border);
+      opacity: 0;
+      transition: all .3s;
+      pointer-events: none;
+      z-index: 200;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: #22c55e40; }
+    .toast.error { border-color: #ef444440; color: #fca5a5; }
+    :root.light .toast.error { color: #dc2626; }
+
+    /* ══════════════════════════════════════════════════
+       设置面板 overlay
+       ══════════════════════════════════════════════════ */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn .2s;
+    }
+    .settings-overlay.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .settings-panel {
+      width: 520px;
+      max-height: 80vh;
+      background: var(--bg-panel);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 60px var(--shadow-heavy);
+      overflow-y: auto;
+      animation: slideUp .25s ease;
+      transition: background .3s, border-color .3s;
+    }
+    .settings-panel::-webkit-scrollbar { width: 4px; }
+    .settings-panel::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+
+    .settings-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-header h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .settings-close {
+      width: 32px; height: 32px;
+      border: none;
+      background: var(--bg-input);
+      color: var(--text-muted);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s;
+    }
+    .settings-close:hover { background: var(--red-bg); color: var(--red); }
+
+    .settings-body { padding: 20px 24px; }
+
+    .settings-section {
+      margin-bottom: 24px;
+    }
+    .settings-section:last-child { margin-bottom: 8px; }
+
+    .settings-section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .setting-row:last-child { margin-bottom: 0; }
+
+    .setting-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      width: 100px;
+      flex-shrink: 0;
+    }
+
+    .setting-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .setting-input:focus { border-color: var(--accent); }
+    .setting-input::placeholder { color: var(--text-faint); }
+
+    .setting-select {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color .2s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    .setting-select:focus { border-color: var(--accent); }
+
+    .setting-hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 4px;
+      margin-left: 112px;
+    }
+
+    /* 主题切换开关 */
+    .theme-switch-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .theme-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .theme-switch input { opacity: 0; width: 0; height: 0; }
+    .theme-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      transition: all .3s;
+    }
+    .theme-slider::before {
+      content: '';
+      position: absolute;
+      height: 20px; width: 20px;
+      left: 2px; bottom: 2px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      transition: all .3s;
+    }
+    .theme-switch input:checked + .theme-slider {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .theme-switch input:checked + .theme-slider::before {
+      transform: translateX(22px);
+      background: white;
+    }
+    .theme-label-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .theme-icon {
+      font-size: 16px;
+      margin-right: 4px;
+    }
+
+    /* 设置底部 */
+    .settings-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .settings-footer .btn { flex: none; padding: 8px 24px; }
+  </style>
+</head>
+<body>
+
+<!-- 顶部标题栏（自定义无边框） -->
+<div class="titlebar">
+  <div class="titlebar-left">
+    <div class="app-icon">✦</div>
+    <div class="app-title">语录收集</div>
+    <span class="app-subtitle">Screenshot → Markdown</span>
+  </div>
+  <div class="titlebar-center"></div>
+  <div class="titlebar-right">
+    <div class="api-key-status" id="api-key-status">
+      <div class="api-key-dot" id="api-key-dot"></div>
+      <span id="api-key-label">未配置</span>
+    </div>
+    <button class="titlebar-btn" id="theme-toggle" title="切换主题">🌙</button>
+    <button class="titlebar-btn" id="settings-btn" title="设置">⚙️</button>
+    <div class="win-controls">
+      <button class="win-btn" id="win-minimize" title="最小化"><span class="min-icon"></span></button>
+      <button class="win-btn" id="win-maximize" title="最大化"><span class="max-icon" id="max-icon"></span></button>
+      <button class="win-btn close-btn" id="win-close" title="关闭">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- 进度条 -->
+<div class="progress-bar-wrap" id="progress-wrap">
+  <div class="progress-bar" id="progress-bar"></div>
+</div>
+
+<!-- 主体 -->
+<div class="main-layout">
+
+  <!-- 左侧：截图区 -->
+  <div class="left-panel">
+    <div class="panel-header">
+      <span class="panel-title">截图列表</span>
+      <span class="badge" id="img-count-badge">0 张</span>
+    </div>
+
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon">🖼️</div>
+      <div class="drop-text">拖拽截图到此处<br>或 <strong id="open-dialog-btn">点击选择文件</strong></div>
+      <div class="drop-hint">支持 JPG、PNG、WEBP · 可多选 · 支持同段多截图</div>
+    </div>
+
+    <div class="image-list" id="image-list">
+      <div class="empty-hint" id="empty-hint">添加截图后在此处显示</div>
+    </div>
+
+    <div class="action-area">
+      <button class="btn btn-secondary" id="clear-btn">🗑️ 清空</button>
+      <button class="btn btn-primary" id="start-btn" disabled>✨ 开始识别</button>
+    </div>
+  </div>
+
+  <!-- 右侧：编辑器 -->
+  <div class="right-panel">
+    <div class="editor-toolbar">
+      <button class="tab-btn active" id="tab-edit">编辑</button>
+      <button class="tab-btn" id="tab-preview">预览</button>
+      <div class="toolbar-sep"></div>
+      <button class="tool-btn" id="export-btn">💾 导出 MD</button>
+      <button class="tool-btn" id="copy-btn">📋 复制</button>
+      <button class="tool-btn danger" id="clear-md-btn">✕ 清空</button>
+    </div>
+    <div class="editor-wrapper">
+      <textarea id="md-editor" placeholder="识别结果将在此显示，你也可以直接编辑…"></textarea>
+      <div id="md-preview">
+        <div class="preview-content" id="preview-content"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 状态栏 -->
+<div class="statusbar">
+  <div class="status-dot" id="status-dot"></div>
+  <span class="status-text" id="status-text">就绪 · 请添加截图并在设置中填入 API Key</span>
+  <span class="status-count" id="status-count"></span>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- ══════════════════════════════════════════════════
+     设置面板
+     ══════════════════════════════════════════════════ -->
+<div class="settings-overlay" id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <h2>⚙️ 设置</h2>
+      <button class="settings-close" id="settings-close">✕</button>
+    </div>
+
+    <div class="settings-body">
+      <!-- API 设置 -->
+      <div class="settings-section">
+        <div class="settings-section-title">API 配置</div>
+
+        <div class="setting-row">
+          <span class="setting-label">API Key</span>
+          <input id="s-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">API 地址</span>
+          <input id="s-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
+        </div>
+
+        <div class="setting-row">
+          <span class="setting-label">模型</span>
+          <input id="s-model" class="setting-input" type="text" placeholder="hunyuan-vision" autocomplete="off" />
+        </div>
+
+        <div class="setting-hint" id="api-hint">
+          提示：请确保已开通混元大模型并创建 API Key；API 地址和模型名称均支持手动输入
+        </div>
+      </div>
+
+      <!-- 外观设置 -->
+      <div class="settings-section">
+        <div class="settings-section-title">外观</div>
+
+        <div class="setting-row">
+          <span class="setting-label">主题</span>
+          <div class="theme-switch-row">
+            <span class="theme-icon" id="theme-icon-current">🌙</span>
+            <label class="theme-switch">
+              <input type="checkbox" id="s-theme" />
+              <span class="theme-slider"></span>
+            </label>
+            <span class="theme-label-text" id="theme-label-text">暗色模式</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 识别设置 -->
+      <div class="settings-section">
+        <div class="settings-section-title">识别</div>
+
+        <div class="setting-row">
+          <span class="setting-label">每批数量</span>
+          <select id="s-batch-size" class="setting-select">
+            <option value="3">3 张/批</option>
+            <option value="5" selected>5 张/批</option>
+            <option value="8">8 张/批</option>
+            <option value="10">10 张/批</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="settings-footer">
+      <button class="btn btn-secondary" id="settings-cancel">取消</button>
+      <button class="btn btn-primary" id="settings-save">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//   DOM 工具（必须最先定义，其他代码依赖此函数）
+// ══════════════════════════════════════════════════
+const $ = id => document.getElementById(id)
+
+// ══════════════════════════════════════════════════
+//   状态管理
+// ══════════════════════════════════════════════════
+const state = {
+  images: [],         // [{path, name, size, dataUrl, thumb}]
+  mdContent: '',
+  processing: false,
+  mode: 'edit'        // 'edit' | 'preview'
+}
+
+// ══════════════════════════════════════════════════
+//   设置管理
+// ══════════════════════════════════════════════════
+const SETTINGS_KEY = 'screenshot_md_settings'
+const DEFAULT_SETTINGS = {
+  apiKey: '',
+  apiHost: 'api.hunyuan.cloud.tencent.com',
+  model: 'hunyuan-vision',
+  theme: 'dark',
+  batchSize: 5
+}
+
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem(SETTINGS_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // 旧版 Minimax 配置迁移到 DeepSeek
+      if (parsed.model?.startsWith('MiniMax') || parsed.model?.startsWith('abab') || (parsed.apiHost && parsed.apiHost.includes('minimax'))) {
+        parsed.apiHost = 'api.hunyuan.cloud.tencent.com'
+        parsed.model = 'hunyuan-vision'
+      }
+      // 旧版 DeepSeek 配置迁移到混元
+      if (parsed.apiHost?.includes('deepseek') || parsed.model?.includes('deepseek')) {
+        parsed.apiHost = 'api.hunyuan.cloud.tencent.com'
+        parsed.model = 'hunyuan-vision'
+      }
+      // 移除已废弃的字段
+      delete parsed.apiPath
+      delete parsed.fallback
+      delete parsed.customHost
+      return { ...DEFAULT_SETTINGS, ...parsed }
+    }
+  } catch {}
+  // 迁移旧 API Key（仅 key 迁移，提供商改为 DeepSeek）
+  const oldKey = localStorage.getItem('minimax_api_key')
+  if (oldKey) {
+    const s = { ...DEFAULT_SETTINGS, apiKey: oldKey }
+    saveSettings(s)
+    localStorage.removeItem('minimax_api_key')
+    return s
+  }
+  return { ...DEFAULT_SETTINGS }
+}
+
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
+let settings = loadSettings()
+
+// ══════════════════════════════════════════════════
+//   主题
+// ══════════════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.className = theme === 'light' ? 'light' : ''
+  const toggle = $('theme-toggle')
+  toggle.textContent = theme === 'light' ? '☀️' : '🌙'
+}
+applyTheme(settings.theme)
+
+//   DOM 引用
+// ══════════════════════════════════════════════════
+const dropZone   = $('drop-zone')
+const imageList  = $('image-list')
+const emptyHint  = $('empty-hint')
+const startBtn   = $('start-btn')
+const clearBtn   = $('clear-btn')
+const mdEditor   = $('md-editor')
+const mdPreview  = $('md-preview')
+const previewContent = $('preview-content')
+const tabEdit    = $('tab-edit')
+const tabPreview = $('tab-preview')
+const exportBtn  = $('export-btn')
+const copyBtn    = $('copy-btn')
+const clearMdBtn = $('clear-md-btn')
+const statusDot  = $('status-dot')
+const statusText = $('status-text')
+const statusCount = $('status-count')
+const imgCountBadge = $('img-count-badge')
+const progressWrap = $('progress-wrap')
+const progressBar  = $('progress-bar')
+
+// 设置面板
+const settingsOverlay = $('settings-overlay')
+const settingsBtn    = $('settings-btn')
+const settingsClose  = $('settings-close')
+const settingsCancel = $('settings-cancel')
+const settingsSave   = $('settings-save')
+const sApikey    = $('s-apikey')
+const sApihost   = $('s-apihost')
+const sModel     = $('s-model')
+const sTheme     = $('s-theme')
+const sBatchSize = $('s-batch-size')
+const themeToggle = $('theme-toggle')
+const apiHint    = $('api-hint')
+
+// 窗口控制
+const winMinimize = $('win-minimize')
+const winMaximize = $('win-maximize')
+const winClose    = $('win-close')
+const maxIcon     = $('max-icon')
+
+// ══════════════════════════════════════════════════
+//   工具函数
+// ══════════════════════════════════════════════════
+function showToast(msg, type = '') {
+  const t = $('toast')
+  t.textContent = msg
+  t.className = 'toast show ' + type
+  clearTimeout(t._timer)
+  t._timer = setTimeout(() => { t.className = 'toast' }, 3000)
+}
+
+function setStatus(text, state = '') {
+  statusText.textContent = text
+  statusDot.className = 'status-dot ' + state
+}
+
+function setProgress(pct) {
+  progressWrap.classList.toggle('active', pct > 0 && pct < 100)
+  progressBar.style.width = pct + '%'
+}
+
+function updateBadge() {
+  const n = state.images.length
+  imgCountBadge.textContent = n + ' 张'
+  imgCountBadge.className = 'badge' + (n > 0 ? ' active' : '')
+  emptyHint.style.display = n === 0 ? '' : 'none'
+  startBtn.disabled = n === 0 || state.processing
+}
+
+function updateApiKeyStatus() {
+  const dot = $('api-key-dot')
+  const label = $('api-key-label')
+  if (settings.apiKey) {
+    dot.className = 'api-key-dot configured'
+    const masked = settings.apiKey.slice(0, 6) + '...' + settings.apiKey.slice(-4)
+    label.textContent = masked
+  } else {
+    dot.className = 'api-key-dot'
+    label.textContent = '未配置'
+  }
+}
+updateApiKeyStatus()
+
+// ══════════════════════════════════════════════════
+//   设置面板逻辑
+// ══════════════════════════════════════════════════
+function openSettings() {
+  // 填入当前设置
+  sApikey.value = settings.apiKey
+  sApihost.value = settings.apiHost
+  sModel.value = settings.model
+  sTheme.checked = settings.theme === 'light'
+  updateThemeLabels()
+  sBatchSize.value = settings.batchSize
+  settingsOverlay.classList.add('active')
+}
+
+function closeSettings() {
+  settingsOverlay.classList.remove('active')
+}
+
+function updateThemeLabels() {
+  const isLight = sTheme.checked
+  $('theme-icon-current').textContent = isLight ? '☀️' : '🌙'
+  $('theme-label-text').textContent = isLight ? '明亮模式' : '暗色模式'
+}
+
+settingsBtn.addEventListener('click', openSettings)
+settingsClose.addEventListener('click', closeSettings)
+settingsCancel.addEventListener('click', closeSettings)
+settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === settingsOverlay) closeSettings()
+})
+
+sTheme.addEventListener('change', updateThemeLabels)
+
+settingsSave.addEventListener('click', () => {
+  const apiHost = sApihost.value.trim()
+  const model = sModel.value.trim()
+  if (!apiHost) {
+    showToast('请输入 API 地址', 'error')
+    return
+  }
+  if (!model) {
+    showToast('请输入模型名称', 'error')
+    return
+  }
+
+  settings = {
+    ...settings,
+    apiKey: sApikey.value.trim(),
+    apiHost,
+    model,
+    theme: sTheme.checked ? 'light' : 'dark',
+    batchSize: parseInt(sBatchSize.value)
+  }
+
+  saveSettings(settings)
+  applyTheme(settings.theme)
+  updateApiKeyStatus()
+  closeSettings()
+  showToast('设置已保存', 'success')
+})
+
+// 快捷主题切换（标题栏按钮）
+themeToggle.addEventListener('click', () => {
+  settings.theme = settings.theme === 'light' ? 'dark' : 'light'
+  saveSettings(settings)
+  applyTheme(settings.theme)
+})
+
+// ══════════════════════════════════════════════════
+//   图片管理
+// ══════════════════════════════════════════════════
+async function addImages(filePaths) {
+  for (const fp of filePaths) {
+    if (state.images.find(i => i.path === fp)) continue
+    const res = await window.electronAPI.readImageAsBase64(fp)
+    if (!res.success) { showToast('读取失败: ' + fp, 'error'); continue }
+    const fname = fp.split(/[\\/]/).pop()
+    const ext = fname.split('.').pop().toLowerCase()
+    state.images.push({ path: fp, name: fname, ext, dataUrl: res.data })
+  }
+  renderImageList()
+  updateBadge()
+}
+
+function removeImage(idx) {
+  state.images.splice(idx, 1)
+  renderImageList()
+  updateBadge()
+}
+
+function renderImageList() {
+  const items = state.images.map((img, i) => `
+    <div class="image-item" draggable="true" data-idx="${i}"
+         ondragstart="onDragStart(event,${i})"
+         ondragover="onDragOver(event,${i})"
+         ondrop="onDrop(event,${i})"
+         ondragleave="onDragLeave(event,${i})">
+      <img class="img-thumb" src="${img.dataUrl}" alt="${img.name}" />
+      <div class="img-info">
+        <div class="img-name">${img.name}</div>
+        <div class="img-size">${img.ext.toUpperCase()}</div>
+      </div>
+      <div class="img-order">${i+1}</div>
+      <button class="img-delete" onclick="removeImage(${i})" title="删除">✕</button>
+    </div>
+  `).join('')
+  imageList.innerHTML = items + (state.images.length === 0 ? '<div class="empty-hint" id="empty-hint">添加截图后在此处显示</div>' : '')
+}
+
+// ── 拖拽排序 ──
+let dragIdx = null
+function onDragStart(e, idx) {
+  dragIdx = idx
+  setTimeout(() => e.target.classList.add('dragging'), 0)
+}
+function onDragOver(e, idx) {
+  e.preventDefault()
+  document.querySelectorAll('.image-item').forEach(el => el.classList.remove('drag-target'))
+  if (idx !== dragIdx) e.currentTarget.classList.add('drag-target')
+}
+function onDragLeave(e, idx) {
+  e.currentTarget.classList.remove('drag-target')
+}
+function onDrop(e, idx) {
+  e.preventDefault()
+  document.querySelectorAll('.image-item').forEach(el => {
+    el.classList.remove('drag-target')
+    el.classList.remove('dragging')
+  })
+  if (dragIdx === null || dragIdx === idx) return
+  const moved = state.images.splice(dragIdx, 1)[0]
+  state.images.splice(idx, 0, moved)
+  renderImageList()
+  updateBadge()
+  dragIdx = null
+}
+
+// ══════════════════════════════════════════════════
+//   文件选择
+// ══════════════════════════════════════════════════
+$('open-dialog-btn').addEventListener('click', async (e) => {
+  e.stopPropagation()
+  const res = await window.electronAPI.openFileDialog()
+  if (res.success && res.filePaths.length) {
+    await addImages(res.filePaths)
+    setStatus(`已添加 ${state.images.length} 张截图，等待识别`, '')
+  }
+})
+
+// 拖拽文件进入窗口
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over') })
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'))
+dropZone.addEventListener('drop', async e => {
+  e.preventDefault()
+  dropZone.classList.remove('drag-over')
+  const files = [...e.dataTransfer.files].filter(f => /\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name))
+  if (!files.length) { showToast('没有识别到图片文件', 'error'); return }
+  const paths = files.map(f => f.path)
+  await addImages(paths)
+  setStatus(`已添加 ${state.images.length} 张截图，等待识别`, '')
+})
+
+clearBtn.addEventListener('click', () => {
+  state.images = []
+  renderImageList()
+  updateBadge()
+  setStatus('已清空截图列表', '')
+})
+
+// ══════════════════════════════════════════════════
+//   主流程：识别
+// ══════════════════════════════════════════════════
+startBtn.addEventListener('click', async () => {
+  // 重新加载设置（可能用户在其他地方改了）
+  settings = loadSettings()
+  const apiKey = settings.apiKey
+  if (!apiKey) {
+    showToast('请先在设置中配置混元 API Key', 'error')
+    openSettings()
+    return
+  }
+  if (state.images.length === 0) { showToast('请先添加截图', 'error'); return }
+
+  state.processing = true
+  startBtn.disabled = true
+
+  const total = state.images.length
+  setProgress(2)
+  setStatus(`第 1 步：正在 OCR ${total} 张截图…`, 'processing')
+
+  const ocrRes = await window.electronAPI.recognizeImagesOCR(
+    state.images.map(img => img.path),
+    { lang: 'chi_sim+eng' }
+  )
+
+  if (!ocrRes.success) {
+    setProgress(0)
+    setStatus('OCR 出错：' + ocrRes.error, 'error')
+    showToast('OCR 失败：' + ocrRes.error, 'error')
+    state.processing = false
+    updateBadge()
+    return
+  }
+
+  const ocrPages = ocrRes.data.pages || []
+  const textCount = ocrPages.reduce((sum, page) => sum + (page.text || '').length, 0)
+  if (textCount === 0) {
+    setProgress(0)
+    setStatus('OCR 完成，但没有识别到文字', '')
+    showToast('没有识别到可整理的文字', '')
+    state.processing = false
+    updateBadge()
+    return
+  }
+
+  setProgress(55)
+  setStatus(`第 2 步：OCR 得到 ${textCount} 字，正在交给模型整理 Markdown…`, 'processing')
+
+  const apiConfig = {
+    apiKey,
+    apiHost: settings.apiHost,
+    model: settings.model
+  }
+  const res = await window.electronAPI.organizeOCRText(apiConfig, ocrPages)
+
+  if (!res.success) {
+    setProgress(0)
+    setStatus('整理出错：' + res.error, 'error')
+    showToast('模型整理失败：' + res.error, 'error')
+    state.processing = false
+    updateBadge()
+    return
+  }
+
+  const apiResp = res.data
+  if (apiResp.error || apiResp.error_code) {
+    setProgress(0)
+    const errMsg = apiResp.error_message || (apiResp.error && apiResp.error.message) || apiResp.error_code || JSON.stringify(apiResp.error || apiResp)
+    setStatus('API 返回错:' + errMsg, 'error')
+    showToast('API 返回错:' + errMsg, 'error')
+    state.processing = false
+    updateBadge()
+    return
+  }
+
+  const allMarkdown = (apiResp.choices?.[0]?.message?.content || '').trim()
+  setProgress(100)
+  setTimeout(() => setProgress(0), 800)
+
+  if (allMarkdown) {
+    const header = `# 语录收集\n\n> 整理时间：${new Date().toLocaleString('zh-CN')}\n> 流程：本地 OCR → 文本模型整理\n\n---\n\n`
+    const finalMd = header + allMarkdown
+    mdEditor.value = finalMd
+    state.mdContent = finalMd
+    updateWordCount()
+    if (state.mode === 'preview') renderPreview()
+    setStatus(`整理完成！共处理 ${total} 张截图，OCR ${textCount} 字`, 'success')
+    showToast('✅ 整理完成', 'success')
+  } else {
+    setStatus('整理完成，但未提取到有效内容', '')
+    showToast('未提取到有效语录', '')
+  }
+
+  state.processing = false
+  updateBadge()
+})
+
+// ══════════════════════════════════════════════════
+//   编辑器
+// ══════════════════════════════════════════════════
+mdEditor.addEventListener('input', () => {
+  state.mdContent = mdEditor.value
+  updateWordCount()
+  if (state.mode === 'preview') renderPreview()
+})
+
+function renderPreview() {
+  previewContent.innerHTML = typeof marked !== 'undefined'
+    ? marked.parse(mdEditor.value || '*（暂无内容）*')
+    : '<p style="color:var(--text-dim)">预览加载中…</p>'
+}
+
+function updateWordCount() {
+  const n = mdEditor.value.length
+  statusCount.textContent = n > 0 ? `${n} 字符` : ''
+}
+
+tabEdit.addEventListener('click', () => {
+  state.mode = 'edit'
+  tabEdit.classList.add('active'); tabPreview.classList.remove('active')
+  mdEditor.style.display = ''; mdPreview.classList.remove('active')
+})
+tabPreview.addEventListener('click', () => {
+  state.mode = 'preview'
+  tabPreview.classList.add('active'); tabEdit.classList.remove('active')
+  mdEditor.style.display = 'none'; mdPreview.classList.add('active')
+  renderPreview()
+})
+
+// ── 导出 ──
+exportBtn.addEventListener('click', async () => {
+  const content = mdEditor.value
+  if (!content.trim()) { showToast('没有可导出的内容', ''); return }
+  const res = await window.electronAPI.saveMDFile(content)
+  if (res.success) {
+    showToast('✅ 已保存到：' + res.filePath.split(/[\\/]/).pop(), 'success')
+    setStatus('文件已导出：' + res.filePath, 'success')
+  } else if (!res.canceled) {
+    showToast('导出失败：' + res.error, 'error')
+  }
+})
+
+// ── 复制 ──
+copyBtn.addEventListener('click', async () => {
+  const content = mdEditor.value
+  if (!content.trim()) { showToast('没有可复制的内容', ''); return }
+  try {
+    await navigator.clipboard.writeText(content)
+    showToast('✅ 已复制到剪贴板', 'success')
+  } catch {
+    showToast('复制失败，请手动选中复制', 'error')
+  }
+})
+
+// ── 清空编辑器 ──
+clearMdBtn.addEventListener('click', () => {
+  if (!mdEditor.value.trim()) return
+  if (confirm('确定清空编辑区内容？')) {
+    mdEditor.value = ''
+    state.mdContent = ''
+    updateWordCount()
+    if (state.mode === 'preview') renderPreview()
+    setStatus('已清空编辑区', '')
+  }
+})
+
+// ══════════════════════════════════════════════════
+//   窗口控制（自定义标题栏）
+// ══════════════════════════════════════════════════
+winMinimize.addEventListener('click', () => window.electronAPI.winMinimize())
+winMaximize.addEventListener('click', () => window.electronAPI.winMaximize())
+winClose.addEventListener('click', () => window.electronAPI.winClose())
+
+// 监听最大化状态变化，更新图标
+async function updateMaxIcon(isMaximized) {
+  if (typeof isMaximized === 'undefined') {
+    isMaximized = await window.electronAPI.winIsMaximized()
+  }
+  maxIcon.className = isMaximized ? 'max-icon maximized' : 'max-icon'
+}
+window.electronAPI.onMaximizeStateChanged((isMaximized) => updateMaxIcon(isMaximized))
+updateMaxIcon()
+
+// 双击标题栏中间区域切换最大化
+document.querySelector('.titlebar-center').addEventListener('dblclick', () => {
+  window.electronAPI.winMaximize()
+})
+
+// ══════════════════════════════════════════════════
+//   初始化
+// ══════════════════════════════════════════════════
+updateBadge()
+setStatus('就绪 · 请添加截图并在设置中配置 API Key', '')
+</script>
+</body>
+</html>

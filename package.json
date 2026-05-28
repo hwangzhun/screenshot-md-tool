@@ -1,0 +1,15 @@
+{
+  "name": "screenshot-md-tool",
+  "version": "1.0.0",
+  "description": "手机截图语录提取工具 - 本地 OCR 后调用文本模型整理为 Markdown",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@tesseract.js-data/chi_sim": "^1.0.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "electron": "^28.3.3",
+    "tesseract.js": "^7.0.0"
+  }
+}
