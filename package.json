@@ -18,15 +18,21 @@
       "main.js",
       "preload.js",
       "index.html",
-      "renderer.js",
-      "package.json",
-      "build/icons/**/*"
+      "renderer/",
+      "vendor/",
+      "main/",
+      "build/",
+      "package.json"
     ],
+    "asar": true,
+    "compression": "maximum",
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icons/icons/win/icon.ico"
@@ -34,7 +40,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "afterPack": "./build/after-pack.js"
   },
   "dependencies": {},
   "devDependencies": {
