@@ -123,6 +123,18 @@
     }
     .app-icon img { width: 100%; height: 100%; object-fit: contain; }
     .app-title { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+    .app-version {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      letter-spacing: 0.02em;
+    }
     .app-subtitle { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
     .titlebar-center {
       flex: 1;
@@ -773,6 +785,7 @@
   <div class="titlebar-left">
     <div class="app-icon"><img src="build/icons/icons/png/256x256.png" alt=""></div>
     <div class="app-title">语录收集</div>
+    <span class="app-version" id="app-version"></span>
     <span class="app-subtitle">Screenshot → Markdown</span>
   </div>
   <div class="titlebar-center"></div>
@@ -872,17 +885,17 @@
 
         <div class="setting-row">
           <span class="setting-label">API Key</span>
-          <input id="s-ocr-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
+          <input id="s-ocr-apikey" class="setting-input" type="password" placeholder="请输入 API Key" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">API 地址</span>
-          <input id="s-ocr-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
+          <input id="s-ocr-apihost" class="setting-input" type="text" placeholder="请输入 API 地址" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">模型</span>
-          <input id="s-ocr-model" class="setting-input" type="text" placeholder="hunyuan-vision" autocomplete="off" />
+          <input id="s-ocr-model" class="setting-input" type="text" placeholder="请输入模型名称" autocomplete="off" />
         </div>
 
         <div class="setting-hint" id="api-hint">
@@ -896,17 +909,17 @@
 
         <div class="setting-row">
           <span class="setting-label">API Key</span>
-          <input id="s-llm-apikey" class="setting-input" type="password" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off" />
+          <input id="s-llm-apikey" class="setting-input" type="password" placeholder="请输入 API Key" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">API 地址</span>
-          <input id="s-llm-apihost" class="setting-input" type="text" placeholder="api.hunyuan.cloud.tencent.com" autocomplete="off" />
+          <input id="s-llm-apihost" class="setting-input" type="text" placeholder="请输入 API 地址" autocomplete="off" />
         </div>
 
         <div class="setting-row">
           <span class="setting-label">模型</span>
-          <input id="s-llm-model" class="setting-input" type="text" placeholder="hunyuan-turbo" autocomplete="off" />
+          <input id="s-llm-model" class="setting-input" type="text" placeholder="请输入模型名称" autocomplete="off" />
         </div>
 
         <div class="setting-hint" id="llm-api-hint">
@@ -989,12 +1002,43 @@ const state = {
 //   设置管理
 // ══════════════════════════════════════════════════
 const SETTINGS_KEY = 'screenshot_md_settings'
+const SETTINGS_VERSION = 2
+const LEGACY_DEFAULT_API_HOST = 'api.hunyuan.cloud.tencent.com'
+const LEGACY_OCR_MODEL = 'hunyuan-vision'
+const LEGACY_LLM_MODEL = 'hunyuan-turbo'
 const DEFAULT_SETTINGS = {
-  ocrApi: { apiKey: '', apiHost: 'api.hunyuan.cloud.tencent.com', model: 'hunyuan-vision' },
-  llmApi: { apiKey: '', apiHost: 'api.hunyuan.cloud.tencent.com', model: 'hunyuan-turbo' },
+  settingsVersion: SETTINGS_VERSION,
+  ocrApi: { apiKey: '', apiHost: '', model: '' },
+  llmApi: { apiKey: '', apiHost: '', model: '' },
   theme: 'dark',
   batchSize: 5,
   skipOrganize: false
+}
+
+function stripLegacyApiDefaults(api, legacyModel) {
+  const next = { ...api }
+  if (next.apiKey?.trim()) return next
+  if (next.apiHost === LEGACY_DEFAULT_API_HOST) next.apiHost = ''
+  if (next.model === legacyModel) next.model = ''
+  return next
+}
+
+function mergeSettings(parsed) {
+  const merged = {
+    ...DEFAULT_SETTINGS,
+    ...parsed,
+    ocrApi: { ...DEFAULT_SETTINGS.ocrApi, ...(parsed.ocrApi || {}) },
+    llmApi: { ...DEFAULT_SETTINGS.llmApi, ...(parsed.llmApi || {}) }
+  }
+  const before = JSON.stringify(merged.ocrApi) + JSON.stringify(merged.llmApi)
+  merged.ocrApi = stripLegacyApiDefaults(merged.ocrApi, LEGACY_OCR_MODEL)
+  merged.llmApi = stripLegacyApiDefaults(merged.llmApi, LEGACY_LLM_MODEL)
+  merged.settingsVersion = SETTINGS_VERSION
+  const after = JSON.stringify(merged.ocrApi) + JSON.stringify(merged.llmApi)
+  if (before !== after || (parsed.settingsVersion || 1) < SETTINGS_VERSION) {
+    saveSettings(merged)
+  }
+  return merged
 }
 
 function loadSettings() {
@@ -1004,8 +1048,8 @@ function loadSettings() {
       const parsed = JSON.parse(saved)
       // 旧版单一 API 配置迁移到双 API 结构
       if (parsed.apiKey && !parsed.ocrApi) {
-        parsed.ocrApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || 'api.hunyuan.cloud.tencent.com', model: parsed.model || 'hunyuan-vision' }
-        parsed.llmApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || 'api.hunyuan.cloud.tencent.com', model: parsed.model === 'hunyuan-vision' ? 'hunyuan-turbo' : (parsed.model || 'hunyuan-turbo') }
+        parsed.ocrApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || '', model: parsed.model || '' }
+        parsed.llmApi = { apiKey: parsed.apiKey, apiHost: parsed.apiHost || '', model: parsed.model || '' }
         delete parsed.apiKey
         delete parsed.apiHost
         delete parsed.model
@@ -1013,7 +1057,7 @@ function loadSettings() {
       delete parsed.apiPath
       delete parsed.fallback
       delete parsed.customHost
-      return { ...DEFAULT_SETTINGS, ...parsed }
+      return mergeSettings(parsed)
     }
   } catch {}
   // 迁移旧 minimax_api_key
@@ -1146,13 +1190,15 @@ updateApiKeyStatus()
 //   设置面板逻辑
 // ══════════════════════════════════════════════════
 function openSettings() {
+  settings.ocrApi = stripLegacyApiDefaults(settings.ocrApi || {}, LEGACY_OCR_MODEL)
+  settings.llmApi = stripLegacyApiDefaults(settings.llmApi || {}, LEGACY_LLM_MODEL)
   // 填入当前设置
-  sOcrApikey.value = settings.ocrApi?.apiKey || ''
-  sOcrApihost.value = settings.ocrApi?.apiHost || 'api.hunyuan.cloud.tencent.com'
-  sOcrModel.value = settings.ocrApi?.model || 'hunyuan-vision'
-  sLlmApikey.value = settings.llmApi?.apiKey || ''
-  sLlmApihost.value = settings.llmApi?.apiHost || 'api.hunyuan.cloud.tencent.com'
-  sLlmModel.value = settings.llmApi?.model || 'hunyuan-turbo'
+  sOcrApikey.value = settings.ocrApi.apiKey || ''
+  sOcrApihost.value = settings.ocrApi.apiHost || ''
+  sOcrModel.value = settings.ocrApi.model || ''
+  sLlmApikey.value = settings.llmApi.apiKey || ''
+  sLlmApihost.value = settings.llmApi.apiHost || ''
+  sLlmModel.value = settings.llmApi.model || ''
   sTheme.checked = settings.theme === 'light'
   sSkipOrganize.checked = !!settings.skipOrganize
   updateThemeLabels()
@@ -1185,26 +1231,18 @@ settingsSave.addEventListener('click', () => {
   const llmApiHost = sLlmApihost.value.trim()
   const llmModel = sLlmModel.value.trim()
 
-  if (!ocrApiHost) {
-    showToast('请输入 OCR API 地址', 'error')
-    return
-  }
-  if (!llmApiHost) {
-    showToast('请输入大模型 API 地址', 'error')
-    return
-  }
-
   settings = {
     ...settings,
+    settingsVersion: SETTINGS_VERSION,
     ocrApi: {
       apiKey: sOcrApikey.value.trim(),
       apiHost: ocrApiHost,
-      model: ocrModel || 'hunyuan-vision'
+      model: ocrModel
     },
     llmApi: {
       apiKey: sLlmApikey.value.trim(),
       apiHost: llmApiHost,
-      model: llmModel || 'hunyuan-turbo'
+      model: llmModel
     },
     theme: sTheme.checked ? 'light' : 'dark',
     batchSize: parseInt(sBatchSize.value),
@@ -1354,8 +1392,28 @@ startBtn.addEventListener('click', async () => {
     openSettings()
     return
   }
+  if (!settings.ocrApi?.apiHost) {
+    showToast('请先在设置中配置 OCR API 地址', 'error')
+    openSettings()
+    return
+  }
+  if (!settings.ocrApi?.model) {
+    showToast('请先在设置中配置 OCR 模型', 'error')
+    openSettings()
+    return
+  }
   if (!settings.skipOrganize && !settings.llmApi?.apiKey) {
     showToast('请先在设置中配置大模型 API Key', 'error')
+    openSettings()
+    return
+  }
+  if (!settings.skipOrganize && !settings.llmApi?.apiHost) {
+    showToast('请先在设置中配置大模型 API 地址', 'error')
+    openSettings()
+    return
+  }
+  if (!settings.skipOrganize && !settings.llmApi?.model) {
+    showToast('请先在设置中配置大模型名称', 'error')
     openSettings()
     return
   }
@@ -1553,6 +1611,13 @@ document.querySelector('.titlebar-center').addEventListener('dblclick', () => {
 // ══════════════════════════════════════════════════
 //   初始化
 // ══════════════════════════════════════════════════
+;(() => {
+  const el = $('app-version')
+  if (!el || !window.electronAPI?.getAppVersion) return
+  window.electronAPI.getAppVersion().then(ver => {
+    if (ver) el.textContent = 'v' + ver
+  })
+})()
 updateBadge()
 setStatus('就绪 · 请添加截图并在设置中配置 API Key', '')
 </script>

@@ -6,6 +6,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  /** 应用版本号（来自 package.json，经主进程读取） */
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   /**
    * 读取图片文件并转为 base64 Data URI
    * @param {string} filePath - 文件绝对路径

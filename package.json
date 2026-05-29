@@ -19,7 +19,8 @@
       "preload.js",
       "index.html",
       "renderer.js",
-      "package.json"
+      "package.json",
+      "build/icons/**/*"
     ],
     "win": {
       "target": [

@@ -7,6 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const https = require('https')
+const { version: appVersion } = require('./package.json')
 
 let mainWindow = null
 
@@ -31,6 +32,12 @@ function createWindow() {
 
   mainWindow.loadFile('index.html')
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.executeJavaScript(
+      `(function(){var e=document.getElementById('app-version');if(e)e.textContent='v${appVersion}'})()`
+    )
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -51,6 +58,11 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+
+// ─────────────────────────────────────────────────────────
+// IPC: 应用版本
+// ─────────────────────────────────────────────────────────
+ipcMain.handle('get-app-version', () => appVersion)
 
 // ─────────────────────────────────────────────────────────
 // IPC: 窗口控制（自定义标题栏）
@@ -237,8 +249,8 @@ async function organizeOCRText(apiConfig, ocrPages) {
  * apiConfig 格式:
  * {
  *   apiKey: string,
- *   apiHost: string,    // e.g. 'api.hunyuan.cloud.tencent.com'
- *   model: string       // e.g. 'hunyuan-vision'
+ *   apiHost: string,    // e.g. ''
+ *   model: string       // e.g. ''
  * }
  *
  * @param {object} apiConfig - API 配置
