@@ -74,14 +74,29 @@ npm start
 
 ```text
 screenshot-md-tool/
-├── main.js      # Electron 主进程：窗口、IPC、API 调用、文件读写
-├── preload.js   # 渲染进程桥接
-├── index.html   # 界面与交互逻辑
+├── main.js                 # Electron 主进程入口
+├── main/
+│   ├── ipc/index.js       # IPC 通信处理
+│   ├── services/
+│   │   ├── http-openai.js  # OpenAI 兼容 API 请求
+│   │   ├── ocr.js         # OCR 识别服务
+│   │   ├── organize.js    # 文本整理服务
+│   │   └── prompts.js     # 提示词管理
+│   └── utils/
+│       └── image.js       # 图片处理工具
+├── renderer/
+│   ├── app.js             # 渲染进程应用逻辑
+│   ├── dom.js             # DOM 操作
+│   └── styles.css         # 界面样式
+├── preload.js             # 渲染进程桥接
+├── index.html             # 主界面
 └── package.json
 ```
 
 ## 技术栈
 
 - Electron 28
+- 模块化主进程架构（`main/` 目录）
 - 原生 `https` 请求 OpenAI 兼容 Chat Completions 接口
 - 无本地 OCR 依赖（已移除 Tesseract）
+- `marked.min.js` 用于 Markdown 渲染
