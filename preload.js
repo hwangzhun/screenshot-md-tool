@@ -1,67 +1,43 @@
-/**
- * preload.js - 预加载脚本
- * 通过 contextBridge 将主进程能力安全暴露给渲染进程
- */
-
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  /** 应用版本号（来自 package.json，经主进程读取） */
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  /**
-   * 读取图片文件并转为 base64 Data URI
-   * @param {string} filePath - 文件绝对路径
-   * @returns {Promise<{success: boolean, data?: string, error?: string}>}
-   */
-  readImageAsBase64: (filePath) =>
-    ipcRenderer.invoke('read-image-base64', filePath),
+  openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
+  saveMDFile: content => ipcRenderer.invoke('save-md-file', content),
 
-  /**
-   * 调用视觉识别 API（腾讯云混元视觉 API，OpenAI 兼容）
-   * @param {object} apiConfig - API 配置对象 { apiKey, apiHost, model }
-   * @param {string[]} base64Images - base64 图片数组（含 data URI 前缀）
-   * @returns {Promise<{success: boolean, data?: object, error?: string}>}
-   */
-  callVisionAPI: (apiConfig, base64Images) =>
-    ipcRenderer.invoke('call-vision-api', apiConfig, base64Images),
+  listTasks: () => ipcRenderer.invoke('tasks-list'),
+  createTask: name => ipcRenderer.invoke('task-create', name),
+  loadTask: id => ipcRenderer.invoke('task-load', id),
+  updateTask: (id, patch) => ipcRenderer.invoke('task-update', id, patch),
+  deleteTask: id => ipcRenderer.invoke('task-delete', id),
+  importTaskImages: (id, paths) => ipcRenderer.invoke('task-import-images', id, paths),
+  removeTaskImage: (id, imageId) => ipcRenderer.invoke('task-remove-image', id, imageId),
+  getTaskImageData: (id, imageId) => ipcRenderer.invoke('task-image-data', id, imageId),
+  undoOrganize: id => ipcRenderer.invoke('task-undo-organize', id),
 
-  /**
-   * 通过云端视觉 API 识别图片文字（需 OpenAI 兼容多模态模型）
-   * @param {string[]} filePaths - 图片文件绝对路径数组
-   * @param {object} ocrApiConfig - OCR API 配置 { apiKey, apiHost, model }
-   */
-  recognizeImagesCloudOCR: (filePaths, ocrApiConfig) =>
-    ipcRenderer.invoke('recognize-images-cloud-ocr', filePaths, ocrApiConfig),
+  startOCR: (taskId, imageIds) => ipcRenderer.invoke('job-start-ocr', taskId, imageIds),
+  retryOCR: (taskId, imageIds) => ipcRenderer.invoke('job-start-ocr', taskId, imageIds),
+  organizeTask: (taskId, allowFailures = false, groupIds) => ipcRenderer.invoke('job-start-organize', taskId, allowFailures, groupIds),
+  updateGroups: (taskId, groups) => ipcRenderer.invoke('group-update', taskId, groups),
+  cancelJob: jobId => ipcRenderer.invoke('job-cancel', jobId),
+  onJobProgress: callback => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('job-progress', listener)
+    return () => ipcRenderer.removeListener('job-progress', listener)
+  },
 
-  /**
-   * 将 OCR 文本发送给文本模型，整理为 Markdown。
-   * @param {object} apiConfig - API 配置对象 { apiKey, apiHost, model }
-   * @param {object[]} ocrPages - OCR 页数组
-   */
-  organizeOCRText: (apiConfig, ocrPages) =>
-    ipcRenderer.invoke('organize-ocr-text', apiConfig, ocrPages),
+  getSettings: () => ipcRenderer.invoke('settings-get'),
+  saveSettings: input => ipcRenderer.invoke('settings-save', input),
+  migrateLegacySettings: legacy => ipcRenderer.invoke('settings-migrate', legacy),
+  testApiConfig: (kind, draft) => ipcRenderer.invoke('settings-test', kind, draft),
 
-  /**
-   * 保存 Markdown 文件（触发系统保存对话框）
-   * @param {string} content - Markdown 文本内容
-   * @returns {Promise<{success: boolean, filePath?: string, canceled?: boolean, error?: string}>}
-   */
-  saveMDFile: (content) =>
-    ipcRenderer.invoke('save-md-file', content),
-
-  /**
-   * 打开文件选择对话框（多选图片）
-   * @returns {Promise<{success: boolean, filePaths?: string[], canceled?: boolean, error?: string}>}
-   */
-  openFileDialog: () =>
-    ipcRenderer.invoke('open-file-dialog'),
-
-  // ── 窗口控制（自定义标题栏） ──
   winMinimize: () => ipcRenderer.invoke('win-minimize'),
   winMaximize: () => ipcRenderer.invoke('win-maximize'),
   winClose: () => ipcRenderer.invoke('win-close'),
   winIsMaximized: () => ipcRenderer.invoke('win-is-maximized'),
-  onMaximizeStateChanged: (callback) => {
-    ipcRenderer.on('maximize-state-changed', (_event, isMaximized) => callback(isMaximized))
+  onMaximizeStateChanged: callback => {
+    const listener = (_event, state) => callback(state)
+    ipcRenderer.on('maximize-state-changed', listener)
+    return () => ipcRenderer.removeListener('maximize-state-changed', listener)
   }
 })

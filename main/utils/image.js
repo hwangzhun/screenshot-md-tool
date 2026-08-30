@@ -39,4 +39,37 @@ function fileExists(filePath) {
   }
 }
 
-module.exports = { getMime, readImageAsBase64, fileExists }
+function getResizeDimensions(width, height, maxDimension = 2400) {
+  const largest = Math.max(width, height)
+  if (!largest || largest <= maxDimension) return { width, height, resized: false }
+  const scale = maxDimension / largest
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+    resized: true
+  }
+}
+
+function prepareUploadCopy(sourcePath, uploadDir, imageId, maxDimension = 2400) {
+  const { nativeImage } = require('electron')
+  const image = nativeImage.createFromPath(sourcePath)
+  if (image.isEmpty()) throw new Error('无法读取图片尺寸')
+  const size = image.getSize()
+  const target = getResizeDimensions(size.width, size.height, maxDimension)
+  if (!target.resized) {
+    return { uploadPath: sourcePath, width: size.width, height: size.height, uploadBytes: 0, resized: false }
+  }
+  fs.mkdirSync(uploadDir, { recursive: true })
+  const uploadPath = path.join(uploadDir, `${imageId}.png`)
+  const resized = image.resize({ width: target.width, height: target.height, quality: 'best' })
+  fs.writeFileSync(uploadPath, resized.toPNG())
+  return {
+    uploadPath,
+    width: size.width,
+    height: size.height,
+    uploadBytes: fs.statSync(uploadPath).size,
+    resized: true
+  }
+}
+
+module.exports = { getMime, readImageAsBase64, fileExists, getResizeDimensions, prepareUploadCopy }

@@ -7,7 +7,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { version: appVersion } = require('./package.json')
-const { registerIpc, setMainWindow } = require('./main/ipc')
+const { registerIpc, setMainWindow, abortAllJobs } = require('./main/ipc')
 
 let mainWindow = null
 
@@ -17,7 +17,7 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#111113',
+    backgroundColor: '#f6f5f4',
     frame: false,
     icon: path.join(__dirname, 'build/icons/icons/png/256x256.png'),
     webPreferences: {
@@ -70,6 +70,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  abortAllJobs()
   if (process.platform !== 'darwin') {
     app.quit()
   }

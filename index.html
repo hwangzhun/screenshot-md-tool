@@ -1,217 +1,152 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>语录收集 · Screenshot to MD</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>语录收集 · 把截图变成 Markdown</title>
   <link rel="stylesheet" href="./renderer/styles.css">
+  <link rel="stylesheet" href="./renderer/groups.css">
+  <script src="./vendor/lucide.min.js"></script>
   <script src="./vendor/marked.min.js"></script>
 </head>
 <body>
-
-<!-- 顶部标题栏（自定义无边框） -->
-<div class="titlebar">
-  <div class="titlebar-left">
-    <div class="app-icon"><img src="build/icons/icons/png/256x256.png" alt=""></div>
-    <div class="app-title">语录收集</div>
-    <span class="app-version" id="app-version"></span>
-    <span class="app-subtitle">Screenshot → Markdown</span>
-  </div>
-  <div class="titlebar-center"></div>
-  <div class="titlebar-right">
-    <div class="api-key-status" id="api-key-status">
-      <div class="api-key-dot" id="ocr-key-dot"></div>
-      <span id="ocr-key-label">OCR 未配置</span>
-      <span class="api-sep">|</span>
-      <div class="api-key-dot" id="llm-key-dot"></div>
-      <span id="llm-key-label">LLM 未配置</span>
+  <header class="titlebar">
+    <div class="brand no-drag">
+      <span class="brand-mark" aria-hidden="true"><img src="build/icons/icons/png/256x256.png" alt=""></span>
+      <span class="brand-copy"><strong>语录收集</strong><small>Screenshot to Markdown</small></span>
+      <span id="app-version" class="version"></span>
     </div>
-    <button class="titlebar-btn" id="theme-toggle" title="切换主题">🌙</button>
-    <button class="titlebar-btn" id="settings-btn" title="设置">⚙️</button>
-    <div class="win-controls">
-      <button class="win-btn" id="win-minimize" title="最小化"><span class="min-icon"></span></button>
-      <button class="win-btn" id="win-maximize" title="最大化"><span class="max-icon" id="max-icon"></span></button>
-      <button class="win-btn close-btn" id="win-close" title="关闭">✕</button>
+    <div class="title-drag"></div>
+    <div class="title-actions no-drag">
+      <button id="api-status" class="api-status" title="打开连接设置"><i data-lucide="circle-alert"></i><span>API 未配置</span></button>
+      <button id="settings-btn" class="icon-btn settings-trigger" title="设置"><i data-lucide="settings"></i><b>设置</b></button>
+      <button id="win-minimize" class="win-btn" title="最小化"><i data-lucide="minus"></i></button>
+      <button id="win-maximize" class="win-btn" title="最大化"><i data-lucide="square"></i></button>
+      <button id="win-close" class="win-btn close" title="关闭"><i data-lucide="x"></i></button>
     </div>
-  </div>
-</div>
+  </header>
 
-<!-- 进度条 -->
-<div class="progress-bar-wrap" id="progress-wrap">
-  <div class="progress-bar" id="progress-bar"></div>
-</div>
+  <div id="progress-track" class="progress-track"><div id="progress-bar"></div></div>
 
-<!-- 主体 -->
-<div class="main-layout">
-
-  <!-- 左侧：截图区 -->
-  <div class="left-panel">
-    <div class="panel-header">
-      <span class="panel-title">截图列表</span>
-      <span class="badge" id="img-count-badge">0 张</span>
-    </div>
-
-    <div class="drop-zone" id="drop-zone">
-      <div class="drop-icon">🖼️</div>
-      <div class="drop-text">拖拽截图到此处<br>或 <strong id="open-dialog-btn">点击选择文件</strong></div>
-      <div class="drop-hint">支持 JPG、PNG、WEBP · 可多选 · 支持同段多截图</div>
-    </div>
-
-    <div class="image-list" id="image-list">
-      <div class="empty-hint" id="empty-hint">添加截图后在此处显示</div>
-    </div>
-
-    <div class="action-area">
-      <button class="btn btn-secondary" id="clear-btn">🗑️ 清空</button>
-      <button class="btn btn-primary" id="start-btn" disabled>✨ 开始识别</button>
-    </div>
-  </div>
-
-  <!-- 右侧：编辑器 -->
-  <div class="right-panel">
-    <div class="editor-toolbar">
-      <button class="tab-btn active" id="tab-edit">编辑</button>
-      <button class="tab-btn" id="tab-preview">预览</button>
-      <div class="toolbar-sep"></div>
-      <button class="tool-btn" id="export-btn">💾 导出 MD</button>
-      <button class="tool-btn" id="copy-btn">📋 复制</button>
-      <button class="tool-btn danger" id="clear-md-btn">✕ 清空</button>
-    </div>
-    <div class="editor-wrapper">
-      <textarea id="md-editor" placeholder="识别结果将在此显示，你也可以直接编辑…"></textarea>
-      <div id="md-preview">
-        <div class="preview-content" id="preview-content"></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- 状态栏 -->
-<div class="statusbar">
-  <div class="status-dot" id="status-dot"></div>
-  <span class="status-text" id="status-text">就绪 · 请添加截图并在设置中填入 API Key</span>
-  <span class="status-count" id="status-count"></span>
-</div>
-
-<!-- Toast -->
-<div class="toast" id="toast"></div>
-
-<!-- ══════════════════════════════════════════════════
-     设置面板
-     ══════════════════════════════════════════════════ -->
-<div class="settings-overlay" id="settings-overlay">
-  <div class="settings-panel">
-    <div class="settings-header">
-      <h2>⚙️ 设置</h2>
-      <button class="settings-close" id="settings-close">✕</button>
-    </div>
-
-    <div class="settings-body">
-      <!-- OCR API 设置 -->
-      <div class="settings-section">
-        <div class="settings-section-title">OCR API 配置</div>
-
-        <div class="setting-row">
-          <span class="setting-label">API Key</span>
-          <input id="s-ocr-apikey" class="setting-input" type="password" placeholder="请输入 API Key" autocomplete="off" />
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">API 地址</span>
-          <input id="s-ocr-apihost" class="setting-input" type="text" placeholder="请输入 API 地址" autocomplete="off" />
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">模型</span>
-          <input id="s-ocr-model" class="setting-input" type="text" placeholder="请输入模型名称" autocomplete="off" />
-        </div>
-
-        <div class="setting-hint" id="api-hint">
-          提示：OCR API 用于识别图片中的文字，支持 OpenAI 兼容视觉模型
-        </div>
-      </div>
-
-      <!-- 大模型 API 设置 -->
-      <div class="settings-section">
-        <div class="settings-section-title">大模型 API 配置</div>
-
-        <div class="setting-row">
-          <span class="setting-label">API Key</span>
-          <input id="s-llm-apikey" class="setting-input" type="password" placeholder="请输入 API Key" autocomplete="off" />
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">API 地址</span>
-          <input id="s-llm-apihost" class="setting-input" type="text" placeholder="请输入 API 地址" autocomplete="off" />
-        </div>
-
-        <div class="setting-row">
-          <span class="setting-label">模型</span>
-          <input id="s-llm-model" class="setting-input" type="text" placeholder="请输入模型名称" autocomplete="off" />
-        </div>
-
-        <div class="setting-hint" id="llm-api-hint">
-          提示：大模型 API 用于将 OCR 文本整理为 Markdown，支持 OpenAI 兼容文本模型
-        </div>
-      </div>
-
-      <!-- 外观设置 -->
-      <div class="settings-section">
-        <div class="settings-section-title">外观</div>
-
-        <div class="setting-row">
-          <span class="setting-label">主题</span>
-          <div class="theme-switch-row">
-            <span class="theme-icon" id="theme-icon-current">🌙</span>
-            <label class="theme-switch">
-              <input type="checkbox" id="s-theme" />
-              <span class="theme-slider"></span>
-            </label>
-            <span class="theme-label-text" id="theme-label-text">暗色模式</span>
+  <main class="app-root">
+    <section id="library-view" class="library-view">
+      <header class="library-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">SCREENSHOT · OCR · MARKDOWN</span>
+          <h1>把截图里的好内容<br><span>收进</span>你的知识库</h1>
+          <p>整理截图、校对原文，再生成干净可编辑的 Markdown。每个任务都会在本机自动保存。</p>
+          <div class="hero-actions">
+            <button id="library-import" class="btn primary large"><i data-lucide="image-plus"></i>导入截图开始</button>
+            <button id="library-new-task" class="btn secondary large"><i data-lucide="file-plus-2"></i>新建空任务</button>
           </div>
         </div>
+        <div class="hero-workflow" aria-label="四阶段处理流程">
+          <span class="hero-note coral"><b>01</b>素材整理</span>
+          <span class="hero-note marigold"><b>02</b>识别校对</span>
+          <span class="hero-note sky"><b>03</b>内容整理</span>
+          <span class="hero-note midnight"><b>04</b>导出文稿</span>
+        </div>
+      </header>
+      <section class="library-section">
+        <div class="section-heading">
+          <div><span class="eyebrow">YOUR LIBRARY</span><h2>最近任务</h2></div>
+          <span id="library-storage" class="library-storage">历史任务会保留在本机</span>
+        </div>
+        <div id="library-task-list" class="library-task-list"></div>
+      </section>
+    </section>
+
+    <section id="workspace-view" class="workspace-view hidden">
+      <header class="workspace-head">
+        <button id="task-drawer-open" class="square-btn" title="打开任务库"><i data-lucide="panel-left-open"></i></button>
+        <div class="task-title-wrap">
+          <input id="task-title" class="task-title" value="未创建任务" aria-label="任务名称" disabled>
+          <span id="autosave-state" class="autosave-state"></span>
+        </div>
+        <div class="head-actions">
+          <button id="workspace-home" class="btn text"><i data-lucide="layout-grid"></i>任务首页</button>
+          <button id="add-images-btn" class="btn secondary"><i data-lucide="image-plus"></i>添加截图</button>
+          <button id="delete-task-btn" class="btn danger text" disabled title="删除当前任务"><i data-lucide="trash-2"></i>删除</button>
+        </div>
+      </header>
+
+      <nav class="steps" aria-label="处理阶段">
+        <button data-stage="materials" class="step current"><span>1</span><b>素材整理</b><small>导入与分组</small></button>
+        <em></em>
+        <button data-stage="review" class="step locked"><span>2</span><b>识别与校对</b><small>提取并修正</small></button>
+        <em></em>
+        <button data-stage="organize" class="step locked"><span>3</span><b>内容整理</b><small>逐篇生成</small></button>
+        <em></em>
+        <button data-stage="export" class="step locked"><span>4</span><b>导出</b><small>预览与保存</small></button>
+      </nav>
+
+      <div class="work-area">
+        <aside id="source-panel" class="source-panel"></aside>
+        <section id="stage-content" class="stage-content"></section>
       </div>
 
-      <!-- 识别设置 -->
-      <div class="settings-section">
-        <div class="settings-section-title">识别</div>
-
-        <div class="setting-row">
-          <span class="setting-label">每批数量</span>
-          <select id="s-batch-size" class="setting-select">
-            <option value="3">3 张/批</option>
-            <option value="5" selected>5 张/批</option>
-            <option value="8">8 张/批</option>
-            <option value="10">10 张/批</option>
-          </select>
+      <footer class="command-bar">
+        <div class="status-wrap"><span id="status-dot" class="status-dot"></span><span id="status-text">就绪</span></div>
+        <div class="command-actions">
+          <button id="back-action" class="btn text hidden"><i data-lucide="arrow-left"></i>上一步</button>
+          <button id="secondary-action" class="btn secondary hidden"></button>
+          <button id="primary-action" class="btn primary" disabled>添加截图</button>
+          <button id="cancel-action" class="btn danger hidden"><i data-lucide="circle-stop"></i>取消处理</button>
         </div>
+      </footer>
+    </section>
+  </main>
 
-        <div class="setting-row">
-          <span class="setting-label">跳过整理</span>
-          <div class="theme-switch-row">
-            <label class="theme-switch">
-              <input type="checkbox" id="s-skip-organize" />
-              <span class="theme-slider"></span>
-            </label>
-            <span class="theme-label-text" id="skip-organize-label">直接输出 OCR 原文</span>
-          </div>
-        </div>
-        <div class="setting-hint">
-          开启后仅调用 OCR API，不再使用大模型整理，适合调试或想自己手动整理的场景
-        </div>
-
+  <div id="task-drawer-overlay" class="drawer-overlay" aria-hidden="true">
+    <aside class="task-drawer">
+      <header>
+        <div><span class="eyebrow">YOUR LIBRARY</span><h2>切换任务</h2></div>
+        <button id="task-drawer-close" class="square-btn" aria-label="关闭任务抽屉"><i data-lucide="x"></i></button>
+      </header>
+      <div class="drawer-actions">
+        <button id="drawer-import" class="btn primary"><i data-lucide="image-plus"></i>导入截图</button>
+        <button id="drawer-new-task" class="btn secondary"><i data-lucide="plus"></i>空任务</button>
       </div>
-    </div>
-
-    <div class="settings-footer">
-      <button class="btn btn-secondary" id="settings-cancel">取消</button>
-      <button class="btn btn-primary" id="settings-save">保存设置</button>
-    </div>
+      <div id="drawer-task-list" class="drawer-task-list"></div>
+      <footer id="drawer-storage"></footer>
+    </aside>
   </div>
-</div>
 
-<script src="./renderer/dom.js"></script>
-<script src="./renderer/app.js"></script>
+  <div id="settings-overlay" class="overlay" aria-hidden="true">
+    <section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header><div><span class="eyebrow">CONNECTION</span><h2 id="settings-title">连接设置</h2></div><button id="settings-close" class="square-btn" aria-label="关闭设置"><i data-lucide="x"></i></button></header>
+      <div class="modal-body">
+        <div id="secure-warning" class="notice warning hidden"></div>
+        <section class="setting-card">
+          <div class="setting-card-head"><div><strong>OCR API</strong><p>需要支持图片输入的 OpenAI 兼容模型</p></div><button id="test-ocr" class="btn secondary small">测试连接</button></div>
+          <label>API Key<div class="password-row"><input id="ocr-key" type="password" placeholder="留空则保留已保存的 Key"><button data-toggle-password="ocr-key" class="square-btn" type="button">显示</button></div></label>
+          <label>API 地址<input id="ocr-host" placeholder="https://api.example.com"></label>
+          <label>模型<input id="ocr-model" placeholder="视觉模型名称"></label>
+        </section>
+        <button id="copy-ocr-config" class="copy-config">↓ 复制 OCR 配置到整理 API</button>
+        <section class="setting-card">
+          <div class="setting-card-head"><div><strong>整理 API</strong><p>把校对后的文字整理为 Markdown</p></div><button id="test-llm" class="btn secondary small">测试连接</button></div>
+          <label>API Key<div class="password-row"><input id="llm-key" type="password" placeholder="留空则保留已保存的 Key"><button data-toggle-password="llm-key" class="square-btn" type="button">显示</button></div></label>
+          <label>API 地址<input id="llm-host" placeholder="https://api.example.com"></label>
+          <label>模型<input id="llm-model" placeholder="文本模型名称"></label>
+        </section>
+        <input id="setting-theme" type="checkbox" checked hidden>
+      </div>
+      <footer><button id="settings-cancel" class="btn secondary">取消</button><button id="settings-save" class="btn primary">保存设置</button></footer>
+    </section>
+  </div>
+
+  <div id="image-viewer" class="image-viewer" aria-hidden="true">
+    <header class="image-viewer-bar">
+      <div><strong id="image-viewer-title">完整截图</strong><span>上下滚动可查看长图全部内容</span></div>
+      <button id="image-viewer-close" class="square-btn" aria-label="关闭完整截图"><i data-lucide="x"></i></button>
+    </header>
+    <div id="image-viewer-canvas" class="image-viewer-canvas"><img id="image-viewer-image" alt=""></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="./renderer/dom.js"></script>
+  <script src="./renderer/flow.js"></script>
+  <script src="./renderer/app.js"></script>
 </body>
 </html>
